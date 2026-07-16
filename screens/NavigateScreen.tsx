@@ -1,4 +1,4 @@
-import React from 'react';
+import React, {useState} from 'react';
 import {FlatList, StyleSheet, Text, TouchableOpacity, View} from 'react-native';
 import {SafeAreaView} from 'react-native-safe-area-context';
 import {useNav} from '../src/navController';
@@ -20,7 +20,23 @@ const NavigateScreen = () => {
     position,
     piOk,
     stopNavigation,
+    checkLocation,
   } = useNav();
+
+  const [gpsChecking, setGpsChecking] = useState(false);
+  const [gpsMsg, setGpsMsg] = useState('');
+
+  const onCheckGps = async () => {
+    setGpsChecking(true);
+    setGpsMsg('Getting a location fix…');
+    const r = await checkLocation();
+    setGpsChecking(false);
+    setGpsMsg(
+      r.ok && r.position
+        ? `GPS OK ✓  ${r.position.lat.toFixed(5)}, ${r.position.lng.toFixed(5)}`
+        : `GPS failed ✗  ${r.error ?? 'unknown error'}`,
+    );
+  };
 
   const piLabel =
     piOk === null ? 'Pi: not sent yet' : piOk ? 'Pi: connected ✓' : 'Pi: unreachable ✗';
@@ -50,6 +66,17 @@ const NavigateScreen = () => {
         ) : (
           <Text style={styles.muted}>GPS: waiting for a fix…</Text>
         )}
+
+        <TouchableOpacity
+          style={styles.gpsBtn}
+          onPress={onCheckGps}
+          disabled={gpsChecking}
+          accessibilityRole="button">
+          <Text style={styles.gpsBtnText}>
+            {gpsChecking ? 'Checking GPS…' : 'Check GPS'}
+          </Text>
+        </TouchableOpacity>
+        {gpsMsg ? <Text style={styles.gpsMsg}>{gpsMsg}</Text> : null}
       </View>
 
       <FlatList
@@ -103,6 +130,15 @@ const styles = StyleSheet.create({
   stepText: {fontSize: 16, flex: 1, paddingRight: 12, color: '#222'},
   stepTextActive: {fontWeight: '700', color: '#00695C'},
   stepDist: {fontSize: 14, color: '#888'},
+  gpsBtn: {
+    marginTop: 10,
+    backgroundColor: '#ECEFF1',
+    paddingVertical: 10,
+    borderRadius: 8,
+    alignItems: 'center',
+  },
+  gpsBtnText: {color: '#1565C0', fontSize: 15, fontWeight: '700'},
+  gpsMsg: {marginTop: 6, fontSize: 14, color: '#333'},
   stopBtn: {backgroundColor: '#C62828', padding: 16, alignItems: 'center'},
   stopText: {color: '#fff', fontSize: 17, fontWeight: '700'},
 });

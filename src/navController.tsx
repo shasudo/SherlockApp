@@ -72,6 +72,7 @@ export interface NavContextValue {
   stopNavigation: () => void;
   reloadConfig: () => Promise<void>;
   testPi: () => Promise<boolean>;
+  checkLocation: () => Promise<{ok: boolean; position?: Position; error?: string}>;
 }
 
 const NavContext = createContext<NavContextValue | null>(null);
@@ -423,12 +424,35 @@ export const NavProvider: React.FC<{children: React.ReactNode}> = ({children}) =
 
   const testPi = useCallback(() => testConnection(cfgRef.current), []);
 
+  // Fetch the current location on its own, so GPS can be verified without the voice flow.
+  const checkLocation = useCallback(async (): Promise<{
+    ok: boolean;
+    position?: Position;
+    error?: string;
+  }> => {
+    const permitted = await ensureLocationPermission();
+    if (!permitted) {
+      return {ok: false, error: 'Location permission denied'};
+    }
+    try {
+      const p = await getPosition();
+      posRef.current = p;
+      setPosition(p);
+      return {ok: true, position: p};
+    } catch (e: any) {
+      return {ok: false, error: e?.message || 'Could not get location'};
+    }
+  }, [ensureLocationPermission, getPosition]);
+
   useEffect(() => {
     try {
+      // 'playServices' = fused location (fast getLastLocation, reliable indoors). NOTE: the
+      // library ignores 'auto' and would otherwise fall back to the raw GPS provider that
+      // times out indoors. On devices without Play Services it degrades to that raw provider.
       Geolocation?.setRNConfiguration?.({
         skipPermissionRequests: true,
         authorizationLevel: 'whenInUse',
-        locationProvider: 'auto',
+        locationProvider: 'playServices',
       });
     } catch {}
     reloadConfig();
@@ -454,6 +478,7 @@ export const NavProvider: React.FC<{children: React.ReactNode}> = ({children}) =
     stopNavigation,
     reloadConfig,
     testPi,
+    checkLocation,
   };
 
   return <NavContext.Provider value={value}>{children}</NavContext.Provider>;
