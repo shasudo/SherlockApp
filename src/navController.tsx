@@ -161,21 +161,36 @@ export const NavProvider: React.FC<{children: React.ReactNode}> = ({children}) =
   }, []);
 
   const getPosition = useCallback((): Promise<Position> => {
+    const toPos = (p: any): Position => ({
+      lat: p.coords.latitude,
+      lng: p.coords.longitude,
+      heading: p.coords.heading ?? undefined,
+      speed: p.coords.speed ?? undefined,
+    });
     return new Promise((resolve, reject) => {
       if (!Geolocation) {
         reject(new Error('Location unavailable on this device'));
         return;
       }
+      // Try a precise GPS fix first, but a high-accuracy fix often can't be obtained
+      // indoors within the timeout — so on failure, fall back to a fast network/coarse
+      // fix and accept a recently-cached location rather than dead-ending.
       Geolocation.getCurrentPosition(
-        (p: any) =>
-          resolve({
-            lat: p.coords.latitude,
-            lng: p.coords.longitude,
-            heading: p.coords.heading ?? undefined,
-            speed: p.coords.speed ?? undefined,
-          }),
-        (e: any) => reject(new Error(e?.message || 'Could not get location')),
-        {enableHighAccuracy: true, timeout: 15000, maximumAge: 10000},
+        (p: any) => resolve(toPos(p)),
+        () => {
+          Geolocation.getCurrentPosition(
+            (p: any) => resolve(toPos(p)),
+            (e: any) =>
+              reject(
+                new Error(
+                  (e?.message || 'Could not get your location') +
+                    '. Turn Location on; a first GPS fix may need open sky.',
+                ),
+              ),
+            {enableHighAccuracy: false, timeout: 20000, maximumAge: 300000},
+          );
+        },
+        {enableHighAccuracy: true, timeout: 12000, maximumAge: 60000},
       );
     });
   }, []);
